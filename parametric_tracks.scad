@@ -43,7 +43,11 @@ BRIDGE_R2=220;
 CONN_WIDTH=7.3;
 CONN_R=6.5;
 CONN_BEVEL=1.7;
-CONN_DEPTH=16;
+CONN_DEPTH=17.5;
+
+CONN_M_R=5.75;
+CONN_M_WIDTH=6.5;
+CONN_M_DEPTH=17;
 
 SUPPORT_SIDE=7.2;
 SUPPORT_THICK=33;
@@ -78,6 +82,41 @@ module body() {
 // - radius, should be either LARGE_RADIUS or LARGE_RADIUS/2
 // - fraction, normally 8.  This creates a curve that is 1/8th of a circle.
 ////////////////////////////////////////////////////////////////////////////////
+
+//The curved track starts along the positive x axis
+//and curves along the XY plane toward the positive Y axis
+module curved_track_mf(radius=LARGE_RADIUS, fraction=NORMAL_CURVE_FRACTION) {
+    difference() {
+            rotate_extrude(convexity = 10, $fn=HIGH_DETAIL, angle=360/fraction)
+            translate([radius, 0, 0])
+            
+            //the cross-section of the track includes rails on the top and bottom
+            difference() {
+                //the default body() only has track cut out of the front.
+            //This part adds track to the bottom
+                body();
+                translate([0,-HEIGHT+TRACK_HEIGHT,0])
+                track();
+            }
+            //This first connector is at the positive x axis
+            translate([radius+WIDTH/2,0,5*HEIGHT])
+       
+            rotate([90,0,90])
+            connector_f();
+        
+    }
+        
+    //male connector at the other end of the track
+        rotate([0,0,360/fraction]){
+            translate([radius+WIDTH/2,0,0])
+            //rotate([0,90,0])
+            connector_m();
+        }
+        
+    
+}
+
+
 module curved_track(radius=LARGE_RADIUS, fraction=NORMAL_CURVE_FRACTION) {
     translate([0,-radius,0])
     difference() {
@@ -95,12 +134,12 @@ module curved_track(radius=LARGE_RADIUS, fraction=NORMAL_CURVE_FRACTION) {
             translate([0,radius+WIDTH/2,5*HEIGHT])
             mirror([1,0,0])
             rotate([90,0,0])
-            connector();
+            connector_f();
         }
 
         translate([0,radius+WIDTH/2,5*HEIGHT])
         rotate([90,0,0])
-        connector();
+        connector_f();
         translate([-1000,-500,-500])
         cube([1000,1000,1000]);
     }
@@ -215,10 +254,10 @@ module bridge_track() {
         bridge_hole(44.5,30);
         bridge_hole(68,BRIDGE_HEIGHT-HEIGHT);
         translate([-0.01,9*HEIGHT,WIDTH/2])
-        connector();
+        connector_f();
         translate([LENGTH+0.01,9*HEIGHT,WIDTH/2])
         mirror([1,0,0])
-        connector();
+        connector_f();
     }
 }
 
@@ -228,9 +267,22 @@ module conn_bevel() {
         polygon(points=[[0,-0.01],[BEVEL+0.01,BEVEL],[BEVEL+0.01,-0.01]]);
 }
 
-module connector() {
+
+module connector_m() {
+    //the shaft
+    translate([-CONN_M_WIDTH/2,0,0])
+        cube([CONN_M_WIDTH, CONN_M_DEPTH-CONN_M_R, HEIGHT]);
+    
+    //the circular hole
+    translate([0,CONN_M_DEPTH-CONN_M_R,0])
+        cylinder(HEIGHT,r=CONN_M_R);
+}
+
+module connector_f() {
     rotate([90,90,0])
     {
+    
+    //the trapezoid bevel shape at the end of the hole 
     hull() {
         translate([-(CONN_WIDTH+2*CONN_BEVEL)/2,-0.01,0])
             cube([CONN_WIDTH+2*CONN_BEVEL, 0.01, 10*HEIGHT]);
@@ -238,36 +290,31 @@ module connector() {
             cube([CONN_WIDTH, 0.01, 10*HEIGHT]);
     }
 
+    //the shaft
     translate([-CONN_WIDTH/2,0,0])
-        cube([CONN_WIDTH, CONN_DEPTH, 10*HEIGHT]);
+        cube([CONN_WIDTH, CONN_DEPTH-CONN_R, 10*HEIGHT]);
+    
+    //the circular hole
+    translate([0,CONN_DEPTH-CONN_R,0])
+    //translate([0,CONN_DEPTH-CONN_R+1.1,0])
+        cylinder(10*HEIGHT,r=CONN_R);
 
-    difference() {
-        translate([0,CONN_DEPTH-CONN_R+1.1,0])
-            cylinder(10*HEIGHT,r=CONN_R);
 
-        // 2013/01/20 mobydisk
-        // This "partial circle" works with some tracks but not others.
-        // The original author shows it working with Brio connectors
-        // It does work with a knock-off brand that uses spherical connectors
-        // It doesn't work with flat Imaginarium connectors
-        // It doesn't work with http://www.thingiverse.com/thing:15165
-        if (CONNECTOR_STYLE==1)
-        {
-            translate([-CONN_WIDTH/2,CONN_DEPTH,0])
-            cube([CONN_WIDTH, CONN_DEPTH, 10*HEIGHT]);
-        }
-    }
-
+    
+    //the outer corner edges of the track 
     conn_bevel();
     mirror([1,0,0])
         conn_bevel();
-
     } 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Normal straight piece
 ////////////////////////////////////////////////////////////////////////////////
+
+
+
+
 module straight_track(len=LENGTH) {
     rotate([90,0,0])
     difference() {
@@ -275,13 +322,39 @@ module straight_track(len=LENGTH) {
             body();
         translate([WIDTH/2,5*HEIGHT,len])
         rotate([0,90,0])
-            connector();
+            connector_f();
         mirror([0,0,1])
         translate([WIDTH/2,5*HEIGHT,0])
         rotate([0,90,0])
-            connector();
+            connector_f();
     }
 }
+
+
+module straight_track(len=LENGTH) {
+    rotate([90,0,0])
+    
+    difference() {
+        linear_extrude(height=len)
+        difference(){
+            //the default body() only has track cut out of the front.
+            //This part adds track to the bottom
+            body();
+            translate([0,-HEIGHT+TRACK_HEIGHT,0])
+            track();
+        }
+        translate([WIDTH/2,5*HEIGHT,len])
+        rotate([0,90,0])
+            connector_f();
+        
+    }
+
+        translate([WIDTH/2,0,0])
+
+            connector_m();
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // This creates two tracks that cross over each other at 90 degrees like a
@@ -621,7 +694,7 @@ module demo_track() {
             curved_and_straight_track();
 }
 
-all_bricks();
+//all_bricks();
 
 //curved_track();
 //curved_track(LARGE_RADIUS/2, 8);  // inner radius, Nth part
@@ -635,9 +708,13 @@ all_bricks();
 //rising_track();
 //bridge_track();
 //straight_track(LENGTH);
+//straight_track_mf(LENGTH);
 //straight_track(LENGTH/5.5);
+//straight_track_mf(LENGTH/5.5);
 //crossing_track(LENGTH/2);
 //support_girder();
 //tunnel();
-
 //demo_track();
+
+//straight_track_mf(20);
+curved_track_mf(LARGE_RADIUS/2, 4);
